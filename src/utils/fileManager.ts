@@ -1,171 +1,167 @@
-// File storage manager using localStorage
-
-const STORAGE_KEY = 'romantic-proposal-files';
+const CACHE_KEY = 'romantic-proposal-files-cache';
 
 export interface StoredFile {
   id: string;
+  pathname: string;
   name: string;
   type: 'photo' | 'music';
-  data: string; // base64
+  data: string;
   uploadedAt: number;
 }
 
+type RemotePayload =
+  | { photos?: StoredFile[]; music?: StoredFile[] }
+  | StoredFile[];
+
+let cache: StoredFile[] = loadCachedFiles();
+
+function loadCachedFiles(): StoredFile[] {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as StoredFile[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistCache() {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function normalizeFile(file: Partial<StoredFile> & {
+  pathname?: string;
+  url?: string;
+  uploadedAt?: number | string | Date;
+}): StoredFile {
+  const pathname = file.pathname || file.id || file.url || `files/${Date.now()}`;
+  const type = pathname.startsWith('music/') ? 'music' : 'photo';
+
+  return {
+    id: file.id || pathname,
+    pathname,
+    name: file.name || pathname.split('/').pop() || 'file',
+    type: file.type || type,
+    data: file.data || file.url || '',
+    uploadedAt:
+      file.uploadedAt instanceof Date
+        ? file.uploadedAt.getTime()
+        : typeof file.uploadedAt === 'string'
+          ? Date.parse(file.uploadedAt)
+          : file.uploadedAt || Date.now(),
+  };
+}
+
+function setCache(files: StoredFile[]) {
+  cache = files;
+  persistCache();
+}
+
+async function readRemoteFiles(): Promise<StoredFile[]> {
+  const response = await fetch('/api/files');
+  if (!response.ok) {
+    throw new Error(`Failed to load files (${response.status})`);
+  }
+
+  const payload = (await response.json()) as RemotePayload;
+  const files = Array.isArray(payload)
+    ? payload
+    : [...(payload.photos || []), ...(payload.music || [])];
+
+  return files.map(normalizeFile);
+}
+
+async function uploadRemoteFile(file: File, type: 'photo' | 'music') {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('type', type);
+
+  const response = await fetch('/api/files', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Upload failed (${response.status})`);
+  }
+
+  return normalizeFile((await response.json()) as StoredFile);
+}
+
+async function deleteRemoteFile(pathname: string) {
+  const response = await fetch(`/api/files?pathname=${encodeURIComponent(pathname)}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok && response.status !== 204) {
+    throw new Error(`Delete failed (${response.status})`);
+  }
+}
+
 export const fileManager = {
-  getAll: (): StoredFile[] => {
+  async refresh(): Promise<StoredFile[]> {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
-      return data ? JSON.parse(data) : [];
+      const files = await readRemoteFiles();
+      setCache(files);
+      return files;
     } catch {
-      return [];
+      cache = loadCachedFiles();
+      return cache;
     }
   },
 
-  getPhotos: (): StoredFile[] => {
-    return fileManager.getAll().filter(f => f.type === 'photo');
+  getAll(): StoredFile[] {
+    return cache;
   },
 
-  getMusic: (): StoredFile[] => {
-    return fileManager.getAll().filter(f => f.type === 'music');
+  getPhotos(): StoredFile[] {
+    return cache.filter((file) => file.type === 'photo');
   },
 
-  addFile: (file: File, type: 'photo' | 'music') => {
-    return new Promise<StoredFile>((resolve, reject) => {
-      try {
-        const id = Date.now().toString();
-        const storedFile: StoredFile = {
-          id,
-          name: file.name,
-          type,
-          data: '',
-          uploadedAt: Date.now(),
-        };
-
-        const files = fileManager.getAll();
-        const typeFiles = files.filter(f => f.type === type);
-
-        if (type === 'photo') {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            try {
-              const base64 = e.target?.result as string;
-              storedFile.data = base64;
-
-              // enforce photo limit
-              if (typeFiles.length >= 50) {
-                // remove oldest photo
-                const firstPhotoIndex = files.findIndex(f => f.type === 'photo');
-                if (firstPhotoIndex !== -1) files.splice(firstPhotoIndex, 1);
-              }
-
-              files.push(storedFile);
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(files));
-              resolve(storedFile);
-            } catch (err) {
-              reject(err);
-            }
-          };
-          reader.onerror = () => reject(new Error('Failed to read file'));
-          reader.readAsDataURL(file);
-        } else {
-          // music: store blob in IndexedDB and store metadata in localStorage to avoid quota issues
-          storedFile.data = '__idb__:' + id;
-
-          // keep the latest 2 music files
-          if (typeFiles.length >= 2) {
-            const oldestMusicIndex = files.findIndex(f => f.type === 'music');
-            if (oldestMusicIndex !== -1) files.splice(oldestMusicIndex, 1);
-          }
-          files.push(storedFile);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(files));
-
-          // store blob in IndexedDB
-          const putBlob = (blob: Blob) => {
-            const req = indexedDB.open('romantic-proposal-db', 1);
-            req.onupgradeneeded = () => {
-              const db = req.result;
-              if (!db.objectStoreNames.contains('music')) db.createObjectStore('music');
-            };
-            req.onsuccess = () => {
-              const db = req.result;
-              const tx = db.transaction('music', 'readwrite');
-              tx.objectStore('music').put(blob, id);
-              tx.oncomplete = () => {
-                resolve(storedFile);
-                db.close();
-              };
-              tx.onerror = () => {
-                reject(tx.error);
-                db.close();
-              };
-            };
-            req.onerror = () => reject(req.error);
-          };
-
-          // file is already a Blob
-          putBlob(file);
-        }
-      } catch (err) {
-        reject(err);
-      }
-    });
+  getMusic(): StoredFile[] {
+    return cache.filter((file) => file.type === 'music');
   },
 
-  deleteFile: (id: string) => {
-    const files = fileManager.getAll().filter(f => f.id !== id);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(files));
+  async addFile(file: File, type: 'photo' | 'music'): Promise<StoredFile> {
+    const uploaded = await uploadRemoteFile(file, type);
+    setCache([...cache.filter((item) => item.id !== uploaded.id), uploaded]);
+    return uploaded;
   },
 
-  clear: () => {
-    localStorage.removeItem(STORAGE_KEY);
+  async deleteFile(idOrPath: string): Promise<void> {
+    const item = cache.find(
+      (file) => file.id === idOrPath || file.pathname === idOrPath || file.data === idOrPath,
+    );
+    const pathname = item?.pathname || idOrPath;
+
+    await deleteRemoteFile(pathname);
+    setCache(cache.filter((file) => file.pathname !== pathname && file.id !== pathname));
   },
-  // Pinned photo id helpers
-  getPinnedPhotoId: (): string | null => {
+
+  clear() {
+    cache = [];
+    persistCache();
+  },
+
+  getPinnedPhotoId(): string | null {
     try {
-      return localStorage.getItem(STORAGE_KEY + ':pinned') || null;
+      return localStorage.getItem(CACHE_KEY + ':pinned') || null;
     } catch {
       return null;
     }
   },
-  setPinnedPhotoId: (id: string | null) => {
+
+  setPinnedPhotoId(id: string | null) {
     try {
-      if (id === null) localStorage.removeItem(STORAGE_KEY + ':pinned');
-      else localStorage.setItem(STORAGE_KEY + ':pinned', id);
+      if (id === null) localStorage.removeItem(CACHE_KEY + ':pinned');
+      else localStorage.setItem(CACHE_KEY + ':pinned', id);
     } catch {
       // ignore
     }
-  },
-  // IndexedDB helpers for music
-  async getMusicBlobUrl(id: string): Promise<string | null> {
-    return new Promise((resolve) => {
-      try {
-        const req = indexedDB.open('romantic-proposal-db', 1);
-        req.onupgradeneeded = () => {
-          const db = req.result;
-          if (!db.objectStoreNames.contains('music')) db.createObjectStore('music');
-        };
-        req.onsuccess = () => {
-          const db = req.result;
-          const tx = db.transaction('music', 'readonly');
-          const getReq = tx.objectStore('music').get(id as any);
-          getReq.onsuccess = () => {
-            const blob = getReq.result as Blob | undefined | null;
-            if (blob) {
-              const url = URL.createObjectURL(blob);
-              resolve(url);
-            } else {
-              resolve(null);
-            }
-            db.close();
-          };
-          getReq.onerror = () => {
-            resolve(null);
-            db.close();
-          };
-        };
-        req.onerror = () => resolve(null);
-      } catch {
-        resolve(null);
-      }
-    });
   },
 };

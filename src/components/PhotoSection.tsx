@@ -47,12 +47,15 @@ export default function PhotoSection() {
 
   // Poll for photo updates from admin
   useEffect(() => {
-    const checkForUpdates = () => {
+    const checkForUpdates = async () => {
+      await fileManager.refresh();
       const updatedPhotos = fileManager.getPhotos();
       setPhotos(updatedPhotos);
     };
-    checkForUpdates();
-    pollIntervalRef.current = setInterval(checkForUpdates, 2000);
+    void checkForUpdates();
+    pollIntervalRef.current = setInterval(() => {
+      void checkForUpdates();
+    }, 2000);
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };

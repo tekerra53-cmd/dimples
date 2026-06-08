@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fileManager, StoredFile } from '../utils/fileManager';
 
 interface Props {
@@ -12,6 +12,14 @@ export default function AdminPanel({ onExit }: Props) {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingMusic, setUploadingMusic] = useState(false);
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    void fileManager.refresh().then(() => {
+      setPhotos(fileManager.getPhotos());
+      setMusic(fileManager.getMusic());
+      setPinnedId(fileManager.getPinnedPhotoId());
+    });
+  }, []);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

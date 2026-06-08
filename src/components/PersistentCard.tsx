@@ -9,7 +9,8 @@ export default function PersistentCard() {
   const [userSelected, setUserSelected] = useState<number | null>(null);
 
   useEffect(() => {
-    const update = () => {
+    const update = async () => {
+      await fileManager.refresh();
       const ps = fileManager.getPhotos();
       setPhotos(ps);
       setPinnedId(fileManager.getPinnedPhotoId());
@@ -22,19 +23,20 @@ export default function PersistentCard() {
       }
     };
 
-    update();
+    void update();
     const id = setInterval(() => {
       // advance index only if no pinned photo and user hasn't selected
       if (!fileManager.getPinnedPhotoId() && userSelected === null) {
         setIndex(i => i + 1);
       }
-      update();
+      void update();
     }, 4000);
     return () => clearInterval(id);
   }, []);
 
   // keep photo updated when index or userSelected changes
   useEffect(() => {
+    void fileManager.refresh();
     const ps = fileManager.getPhotos();
     const pinned = fileManager.getPinnedPhotoId();
     if (pinned) {
