@@ -50,34 +50,46 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const formData = await request.formData();
-  const file = formData.get('file');
-  const type = formData.get('type');
+  try {
+    const formData = await request.formData();
+    const file = formData.get('file');
+    const type = formData.get('type');
 
-  if (!(file instanceof File)) {
-    return new Response('Missing file', { status: 400 });
+    if (!(file instanceof File)) {
+      return new Response('Missing file', { status: 400 });
+    }
+
+    const fileType: FileType = type === 'music' ? 'music' : 'photo';
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '_');
+    const pathname = `${fileType}s/${Date.now()}-${safeName}`;
+
+    const blob = await put(pathname, file, {
+      access: 'public',
+      addRandomSuffix: false,
+    });
+
+    return Response.json(toStoredFile(blob));
+  } catch (error) {
+    console.error('POST /api/files failed', error);
+    const message = error instanceof Error ? error.message : String(error);
+    return Response.json({ error: message }, { status: 500 });
   }
-
-  const fileType: FileType = type === 'music' ? 'music' : 'photo';
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '_');
-  const pathname = `${fileType}s/${Date.now()}-${safeName}`;
-
-  const blob = await put(pathname, file, {
-    access: 'public',
-    addRandomSuffix: false,
-  });
-
-  return Response.json(toStoredFile(blob));
 }
 
 export async function DELETE(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const target = searchParams.get('url') ?? searchParams.get('pathname');
+  try {
+    const { searchParams } = new URL(request.url);
+    const target = searchParams.get('url') ?? searchParams.get('pathname');
 
-  if (!target) {
-    return new Response('Missing url', { status: 400 });
+    if (!target) {
+      return new Response('Missing url', { status: 400 });
+    }
+
+    await del(target);
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    console.error('DELETE /api/files failed', error);
+    const message = error instanceof Error ? error.message : String(error);
+    return Response.json({ error: message }, { status: 500 });
   }
-
-  await del(target);
-  return new Response(null, { status: 204 });
 }
