@@ -257,8 +257,9 @@ export default function PhotoSection() {
                     border: `3px solid ${position === 'center' ? 'rgba(0, 212, 255, 0.6)' : 'rgba(0, 212, 255, 0.2)'}`,
                     transform,
                     opacity,
-                    transition: 'all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                    transition: 'transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease, border-color 0.3s ease',
                     cursor: position === 'center' ? 'pointer' : 'grab',
+                    willChange: 'transform, opacity',
                   }}
                 >
                   {/* Gradient Overlay */}

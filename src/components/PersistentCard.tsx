@@ -17,9 +17,6 @@ export default function PersistentCard() {
       if (fileManager.getPinnedPhotoId()) {
         const pinned = ps.find(p => p.id === fileManager.getPinnedPhotoId()) || null;
         setPhoto(pinned);
-      } else {
-        // cycle among photos
-        setPhoto(ps.length ? ps[index % ps.length] : null);
       }
     };
 
@@ -32,11 +29,10 @@ export default function PersistentCard() {
       void update();
     }, 4000);
     return () => clearInterval(id);
-  }, []);
+  }, [userSelected]);
 
   // keep photo updated when index or userSelected changes
   useEffect(() => {
-    void fileManager.refresh();
     const ps = fileManager.getPhotos();
     const pinned = fileManager.getPinnedPhotoId();
     if (pinned) {
@@ -51,7 +47,7 @@ export default function PersistentCard() {
       return () => clearTimeout(t);
     }
     setPhoto(ps.length ? ps[index % ps.length] : null);
-  }, [index, userSelected]);
+  }, [index, userSelected, photos]);
 
   return (
     <section className="w-full flex justify-center items-center my-12">
@@ -71,6 +67,7 @@ export default function PersistentCard() {
           max-width: 90%;
           transition: transform 0.35s ease, opacity 0.35s ease;
           animation: floatY 6s ease-in-out infinite;
+          will-change: transform, opacity;
         }
         .persistent-card-inner {
           border-radius: 16px;
@@ -89,6 +86,7 @@ export default function PersistentCard() {
           display: block;
           transform-origin: center center;
           transition: transform 0.6s cubic-bezier(.2,.8,.2,1);
+          will-change: transform;
         }
         .persistent-card-outer:hover { transform: translateY(-6px) scale(1.02); }
         .persistent-card-outer:active { transform: translateY(-2px) scale(1.01); }
