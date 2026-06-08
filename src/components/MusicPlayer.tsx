@@ -14,7 +14,7 @@ export default function MusicPlayer({ autoPlay }: Props) {
   const [songs, setSongs] = useState<Song[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.18);
   const [progress, setProgress] = useState(0);
   const [isExpanded, setIsExpanded] = useState(true);
@@ -26,7 +26,6 @@ export default function MusicPlayer({ autoPlay }: Props) {
   const progressRef = useRef<number>(0);
   const vinylRef = useRef<number>(0);
   const [userInteracted, setUserInteracted] = useState(false);
-  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
 
   // Load music from fileManager on mount
   useEffect(() => {
@@ -92,13 +91,10 @@ export default function MusicPlayer({ autoPlay }: Props) {
       await audio.play();
       setIsPlaying(true);
       setUserInteracted(true);
-      setAutoplayBlocked(false);
       fadeIn(audio, isMuted ? 0 : volume);
-      try { window.dispatchEvent(new CustomEvent('audio-enabled')); } catch {}
       return true;
     } catch (err) {
       console.warn('play error', err);
-      setAutoplayBlocked(true);
       setUserInteracted(true);
       setIsPlaying(false);
       return false;
@@ -107,10 +103,22 @@ export default function MusicPlayer({ autoPlay }: Props) {
 
   // Listen for external requests to play (e.g., overlay button)
   useEffect(() => {
-    const handler = () => { attemptPlay(); };
-    window.addEventListener('request-audio-play', handler as EventListener);
-    return () => window.removeEventListener('request-audio-play', handler as EventListener);
-  }, [attemptPlay]);
+    const handler = () => {
+      if (!isPlaying) {
+        attemptPlay();
+      }
+    };
+
+    window.addEventListener('click', handler, { once: true });
+    window.addEventListener('keydown', handler, { once: true });
+    window.addEventListener('touchstart', handler, { once: true });
+
+    return () => {
+      window.removeEventListener('click', handler);
+      window.removeEventListener('keydown', handler);
+      window.removeEventListener('touchstart', handler);
+    };
+  }, [attemptPlay, isPlaying]);
 
   // Listen for user interactions to unmute the audio
   useEffect(() => {
@@ -424,13 +432,6 @@ export default function MusicPlayer({ autoPlay }: Props) {
 
           {isExpanded && (
             <>
-              {autoplayBlocked && (
-                <div style={{ textAlign: 'center', marginBottom: 10 }}>
-                  <button onClick={attemptPlay} style={{ padding: '8px 12px', borderRadius: 8, background: '#00aaff', color: 'white', border: 'none', cursor: 'pointer' }}>
-                    Click to enable sound
-                  </button>
-                </div>
-              )}
               {audioError && (
                 <div style={{ textAlign: 'center', marginBottom: 10, padding: '8px', background: 'rgba(255,100,100,0.1)', borderRadius: 8, border: '1px solid rgba(255,100,100,0.3)' }}>
                   <div style={{ fontSize: '11px', color: 'rgba(255,150,150,0.9)' }}>

@@ -70,10 +70,10 @@ export const fileManager = {
           // music: store blob in IndexedDB and store metadata in localStorage to avoid quota issues
           storedFile.data = '__idb__:' + id;
 
-          // ensure only one music file stored in metadata
-          if (typeFiles.length >= 1) {
-            const musicIndex = files.findIndex(f => f.type === 'music');
-            if (musicIndex !== -1) files.splice(musicIndex, 1);
+          // keep the latest 2 music files
+          if (typeFiles.length >= 2) {
+            const oldestMusicIndex = files.findIndex(f => f.type === 'music');
+            if (oldestMusicIndex !== -1) files.splice(oldestMusicIndex, 1);
           }
           files.push(storedFile);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(files));

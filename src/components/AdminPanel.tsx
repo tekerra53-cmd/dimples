@@ -359,10 +359,10 @@ export default function AdminPanel({ onExit }: Props) {
               gap: '8px',
             }}
           >
-            🎵 Upload Music ({music.length}/1)
+            🎵 Upload Music ({music.length}/2)
           </h2>
           <p style={{ color: 'rgba(200, 230, 255, 0.7)', fontSize: '0.9rem', marginBottom: '12px' }}>
-            Upload background music for the experience. Max 1 song stored.
+            Upload background music for the experience. Max 2 songs stored.
           </p>
 
           <label
@@ -390,7 +390,7 @@ export default function AdminPanel({ onExit }: Props) {
               type="file"
               accept="audio/*"
               onChange={handleMusicUpload}
-              disabled={uploadingMusic || music.length >= 1}
+              disabled={uploadingMusic || music.length >= 2}
               style={{ display: 'none' }}
             />
             <div style={{ color: uploadingMusic ? '#ffcc00' : '#00d4ff', fontWeight: '600' }}>

@@ -16,10 +16,8 @@ import EndingScene from './components/EndingScene';
 import CelebrationOverlay from './components/CelebrationOverlay';
 
 export default function App() {
-  // Initialize from localStorage if available
   const [unlocked, setUnlocked] = useState(false);
   const [welcomeShown, setWelcomeShown] = useState(false);
-  const [, setMusicReady] = useState(false);
   const [showMain, setShowMain] = useState(() => {
     try {
       const saved = localStorage.getItem('showMain');
@@ -30,15 +28,7 @@ export default function App() {
   });
   const [showEnding, setShowEnding] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
-  const [audioAllowed, setAudioAllowed] = useState(() => {
-    try {
-      return localStorage.getItem('audio_enabled') === 'true';
-    } catch {
-      return false;
-    }
-  });
 
-  // Persist showMain to localStorage
   useEffect(() => {
     try {
       localStorage.setItem('showMain', String(showMain));
@@ -46,25 +36,6 @@ export default function App() {
       // Silently fail if localStorage is not available
     }
   }, [showMain]);
-
-  // listen for audio-enabled event
-  useEffect(() => {
-    const handler = () => {
-      try { localStorage.setItem('audio_enabled', 'true'); } catch {}
-      setAudioAllowed(true);
-    };
-    window.addEventListener('audio-enabled', handler as EventListener);
-    return () => window.removeEventListener('audio-enabled', handler as EventListener);
-  }, []);
-
-  // prevent scrolling until audio allowed
-  useEffect(() => {
-    try {
-      if (!audioAllowed) document.body.style.overflow = 'hidden';
-      else document.body.style.overflow = '';
-    } catch {}
-    return () => { try { document.body.style.overflow = ''; } catch {} };
-  }, [audioAllowed]);
 
   const handleUnlock = useCallback(() => {
     setUnlocked(true);
@@ -82,7 +53,6 @@ export default function App() {
     setShowMain(false);
     setShowEnding(false);
     setShowCelebration(false);
-    setMusicReady(false);
     try {
       localStorage.removeItem('showMain');
     } catch {
@@ -101,10 +71,8 @@ export default function App() {
 
   return (
     <div className="relative min-h-screen" style={{ background: '#050d1f' }}>
-      {/* Global Particle Canvas */}
       <ParticleCanvas active={showMain} />
 
-      {/* Lock Screen */}
       {!showMain && (
         <LockScreen
           onUnlock={handleUnlock}
@@ -113,13 +81,10 @@ export default function App() {
         />
       )}
 
-      {/* Scroll Progress */}
       {showMain && <ScrollProgress />}
 
-      {/* Music Player - Always render, autoplay on lock screen */}
       <MusicPlayer autoPlay={true} />
 
-      {/* Logout Button */}
       {showMain && (
         <button
           onClick={handleLogout}
@@ -155,26 +120,10 @@ export default function App() {
         </button>
       )}
 
-      {/* Celebration Overlay */}
       {showCelebration && <CelebrationOverlay />}
 
-      {/* Main Content */}
       {showMain && (
         <main>
-          {!audioAllowed && (
-            <div style={{position: 'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', background:'linear-gradient(180deg, rgba(5,13,31,0.92), rgba(5,13,31,0.98))', color:'#fff', padding:20, textAlign:'center'}}>
-              <div>
-                <h2 style={{fontSize:22, marginBottom:12}}>Please enable sound to continue</h2>
-                <p style={{opacity:0.95, marginBottom:18}}>Tap the play button below to enable audio. Scrolling and reading will be available after that.</p>
-                <div style={{display:'flex', gap:12, justifyContent:'center', alignItems:'center'}}>
-                  <button onClick={() => window.dispatchEvent(new Event('request-audio-play'))} style={{padding:'10px 16px', borderRadius:10, background:'#00aaff', color:'#fff', border:'none', fontWeight:600, cursor:'pointer'}}>
-                    ▶ Enable Sound
-                  </button>
-                  <div style={{opacity:0.9}}>Or use the player control (🎵) at the top-right.</div>
-                </div>
-              </div>
-            </div>
-          )}
           <OpeningScene />
           <HeroSection />
           <PersistentCard />
