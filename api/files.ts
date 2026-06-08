@@ -3,7 +3,7 @@ import { del, list, put } from '@vercel/blob';
 type FileType = 'photo' | 'music';
 
 function getTypeFromPathname(pathname: string): FileType {
-  return pathname.startsWith('music/') ? 'music' : 'photo';
+  return pathname.startsWith('music/') || pathname.startsWith('musics/') ? 'music' : 'photo';
 }
 
 function toStoredFile(blob: {
@@ -61,7 +61,8 @@ export async function POST(request: Request) {
 
     const fileType: FileType = type === 'music' ? 'music' : 'photo';
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '_');
-    const pathname = `${fileType}s/${Date.now()}-${safeName}`;
+    const folder = fileType === 'music' ? 'music' : 'photos';
+    const pathname = `${folder}/${Date.now()}-${safeName}`;
 
     const blob = await put(pathname, file, {
       access: 'public',
