@@ -9,7 +9,7 @@ function getTypeFromPathname(pathname: string): FileType {
 function toStoredFile(blob: {
   pathname: string;
   url: string;
-  uploadedAt: Date;
+  uploadedAt?: Date;
 }): {
   id: string;
   pathname: string;
@@ -24,7 +24,7 @@ function toStoredFile(blob: {
     name: blob.pathname.split('/').pop() ?? blob.pathname,
     type: getTypeFromPathname(blob.pathname),
     data: blob.url,
-    uploadedAt: blob.uploadedAt.getTime(),
+    uploadedAt: blob.uploadedAt ? blob.uploadedAt.getTime() : Date.now(),
   };
 }
 
