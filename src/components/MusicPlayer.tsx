@@ -26,6 +26,7 @@ export default function MusicPlayer({ autoPlay }: Props) {
   const progressTimerRef = useRef<number | null>(null);
   const vinylTimerRef = useRef<number | null>(null);
   const errorTimeoutRef = useRef<number | null>(null);
+  const fadeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,14 +58,32 @@ export default function MusicPlayer({ autoPlay }: Props) {
   const currentSong = songs[currentIndex];
 
   const fadeIn = useCallback((audio: HTMLAudioElement, targetVol: number) => {
-    audio.volume = 0;
-    let vol = 0;
-    const step = targetVol / 40;
-    const interval = window.setInterval(() => {
-      vol = Math.min(vol + step, targetVol);
-      audio.volume = vol;
-      if (vol >= targetVol) clearInterval(interval);
-    }, 120);
+    if (fadeTimerRef.current) {
+      clearInterval(fadeTimerRef.current);
+      fadeTimerRef.current = null;
+    }
+
+    const startVol = Math.max(0, Math.min(1, audio.volume));
+    const endVol = Math.max(0, Math.min(1, targetVol));
+    if (Math.abs(startVol - endVol) < 0.01) {
+      audio.volume = endVol;
+      return;
+    }
+
+    const steps = 24;
+    const stepSize = (endVol - startVol) / steps;
+    let currentStep = 0;
+
+    fadeTimerRef.current = window.setInterval(() => {
+      currentStep += 1;
+      const nextVol = startVol + stepSize * currentStep;
+      audio.volume = Math.max(0, Math.min(1, nextVol));
+      if (currentStep >= steps) {
+        audio.volume = endVol;
+        if (fadeTimerRef.current) clearInterval(fadeTimerRef.current);
+        fadeTimerRef.current = null;
+      }
+    }, 40);
   }, []);
 
   const attemptPlay = useCallback(async () => {
@@ -175,10 +194,17 @@ export default function MusicPlayer({ autoPlay }: Props) {
     if (!audio || !currentSong || !autoPlay || audioError) return;
 
     if (isPlaying) {
-      audio.play().then(() => fadeIn(audio, isMuted ? 0 : volume)).catch((e) => {
-        console.warn('play error', e);
-        setIsPlaying(false);
-      });
+      const playPromise = audio.play();
+      if (playPromise) {
+        playPromise
+          .then(() => fadeIn(audio, isMuted ? 0 : volume))
+          .catch((e) => {
+            console.warn('play error', e);
+            setIsPlaying(false);
+          });
+      } else {
+        fadeIn(audio, isMuted ? 0 : volume);
+      }
     } else {
       audio.pause();
     }
@@ -201,6 +227,7 @@ export default function MusicPlayer({ autoPlay }: Props) {
 
     return () => {
       if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+      if (fadeTimerRef.current) clearInterval(fadeTimerRef.current);
     };
   }, []);
 
@@ -215,6 +242,7 @@ export default function MusicPlayer({ autoPlay }: Props) {
 
     return () => {
       if (vinylTimerRef.current) clearInterval(vinylTimerRef.current);
+      if (fadeTimerRef.current) clearInterval(fadeTimerRef.current);
     };
   }, [isPlaying]);
 
